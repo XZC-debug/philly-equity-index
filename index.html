@@ -136,14 +136,14 @@
       padding: 40px 48px;
       display: none;   /* shown via JS toggle */
     }
-    .methodology h2 { font-size: 1.1rem; margin-bottom: 20px; color: var(--accent); }
+    .methodology h2 { font-size: 1.4rem; margin-bottom: 24px; color: var(--accent); letter-spacing: 0.02em; }
     .method-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px,1fr)); gap: 24px; }
     .method-card {
       background: var(--bg); border: 1px solid var(--border);
-      border-radius: 8px; padding: 18px 20px;
+      border-radius: 8px; padding: 20px 22px;
     }
-    .method-card h4 { font-size: 0.85rem; margin-bottom: 8px; }
-    .method-card p, .method-card li { font-size: 0.78rem; color: var(--muted); line-height: 1.6; }
+    .method-card h4 { font-size: 0.95rem; margin-bottom: 10px; color: var(--text); }
+    .method-card p, .method-card li { font-size: 0.85rem; color: var(--muted); line-height: 1.7; }
     .method-card ul { padding-left: 14px; }
     .formula {
       font-family: "SF Mono", Consolas, monospace;
@@ -154,11 +154,19 @@
     }
     .methodology-toggle {
       display: block; width: 100%;
-      background: var(--surface); border-top: 1px solid var(--border); border-bottom: none; border-left: none; border-right: none;
-      color: var(--muted); font-size: 0.78rem; padding: 10px;
-      cursor: pointer; text-align: center; transition: color .15s;
+      background: var(--surface);
+      border-top: 2px solid var(--accent);
+      border-bottom: none; border-left: none; border-right: none;
+      color: var(--accent); font-size: 1rem; font-weight: 600;
+      padding: 18px 24px;
+      cursor: pointer; text-align: center;
+      letter-spacing: 0.04em;
+      transition: background .2s, color .2s;
     }
-    .methodology-toggle:hover { color: var(--text); }
+    .methodology-toggle:hover {
+      background: rgba(99,179,237,0.08);
+      color: var(--text);
+    }
 
     /* Scrollbar */
     .sidebar::-webkit-scrollbar { width: 5px; }
