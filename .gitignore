@@ -1,0 +1,14 @@
+# 原始数据（体积太大）
+*.csv
+crime_points.geojson
+transit_stops.geojson
+PWD_PARCELS.geojson
+
+# 系统文件
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Python 缓存
+__pycache__/
+*.pyc

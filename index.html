@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Philadelphia Neighborhood Equity & Livability Index</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <style>
+    /* ── Reset & base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:       #f5f7fa;
+      --surface:  #ffffff;
+      --border:   #dde1e7;
+      --text:     #1a202c;
+      --muted:    #64748b;
+      --accent:   #2563eb;
+      --accent2:  #ef4444;
+      --green:    #16a34a;
+      --yellow:   #d97706;
+      --red:      #dc2626;
+    }
+    html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ── Header ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 20px 32px;
+    }
+    header h1 { font-size: 1.35rem; font-weight: 700; letter-spacing: -0.02em; }
+    header h1 span { color: var(--accent); }
+    header p { font-size: 0.82rem; color: var(--muted); margin-top: 4px; }
+    .badge {
+      display: inline-block; font-size: 0.7rem; font-weight: 600;
+      padding: 2px 8px; border-radius: 12px; margin-right: 6px; margin-top: 8px;
+    }
+    .badge-blue   { background: #1f3a5f; color: var(--accent); }
+    .badge-green  { background: #1c3828; color: var(--green); }
+    .badge-orange { background: #3d2710; color: #ffa657; }
+    .badge-red    { background: #3d1010; color: var(--red); }
+
+    /* ── Layout ── */
+    .app { display: flex; height: calc(100vh - 85px); }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 340px; min-width: 280px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      flex-shrink: 0;
+    }
+    .sidebar-section {
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar-section h3 {
+      font-size: 0.72rem; font-weight: 600; letter-spacing: .08em;
+      text-transform: uppercase; color: var(--muted); margin-bottom: 10px;
+    }
+
+    /* Layer switcher */
+    .layer-btn {
+      display: flex; align-items: center; gap: 8px;
+      width: 100%; padding: 8px 10px; margin-bottom: 4px;
+      background: transparent; border: 1px solid transparent;
+      border-radius: 6px; color: var(--text); font-size: 0.82rem;
+      cursor: pointer; text-align: left; transition: all .15s;
+    }
+    .layer-btn:hover { background: rgba(88,166,255,.08); border-color: rgba(88,166,255,.2); }
+    .layer-btn.active { background: rgba(88,166,255,.12); border-color: rgba(88,166,255,.4); color: var(--accent); }
+    .layer-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+    /* Stats cards */
+    .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .stat-card {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; padding: 10px 12px;
+    }
+    .stat-card .num { font-size: 1.25rem; font-weight: 700; line-height: 1; }
+    .stat-card .lbl { font-size: 0.68rem; color: var(--muted); margin-top: 3px; }
+    .stat-card.accent .num { color: var(--accent); }
+    .stat-card.red    .num { color: var(--red); }
+    .stat-card.green  .num { color: var(--green); }
+    .stat-card.yellow .num { color: var(--yellow); }
+
+    /* Tract popup info */
+    #tract-info { font-size: 0.8rem; }
+    #tract-info .ti-name {
+      font-size: 0.9rem; font-weight: 700; margin-bottom: 10px;
+      padding-bottom: 8px; border-bottom: 1px solid var(--border);
+    }
+    .ti-row { display: flex; justify-content: space-between; padding: 4px 0; }
+    .ti-row .ti-key { color: var(--muted); }
+    .ti-row .ti-val { font-weight: 600; }
+    .ti-bar-wrap { margin-top: 4px; background: var(--bg); border-radius: 4px; height: 6px; overflow: hidden; }
+    .ti-bar { height: 6px; border-radius: 4px; transition: width .4s; }
+    #tract-placeholder { color: var(--muted); font-size: 0.8rem; font-style: italic; }
+
+    /* Legend */
+    .legend-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; font-size: 0.78rem; }
+    .legend-swatch { width: 16px; height: 16px; border-radius: 3px; flex-shrink: 0; }
+
+    /* Chart */
+    #chart-wrap { padding: 10px 14px 14px; }
+    #chart-wrap h3 { font-size: 0.72rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+    #scatter-canvas { max-height: 180px; }
+
+    /* ── Map area ── */
+    #map { flex: 1; z-index: 0; }
+
+    /* Leaflet overrides */
+    .leaflet-container { background: #e8edf2 !important; }
+    .leaflet-popup-content-wrapper {
+      background: var(--surface); color: var(--text);
+      border: 1px solid var(--border); border-radius: 8px;
+      box-shadow: 0 4px 24px rgba(0,0,0,.15);
+    }
+    .leaflet-popup-tip { background: var(--surface); }
+    .leaflet-control-zoom a { background: var(--surface) !important; color: var(--text) !important; border-color: var(--border) !important; }
+
+    /* ── Methodology section (below fold) ── */
+    .methodology {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 40px 48px;
+      display: none;   /* shown via JS toggle */
+    }
+    .methodology h2 { font-size: 1.1rem; margin-bottom: 20px; color: var(--accent); }
+    .method-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px,1fr)); gap: 24px; }
+    .method-card {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; padding: 18px 20px;
+    }
+    .method-card h4 { font-size: 0.85rem; margin-bottom: 8px; }
+    .method-card p, .method-card li { font-size: 0.78rem; color: var(--muted); line-height: 1.6; }
+    .method-card ul { padding-left: 14px; }
+    .formula {
+      font-family: "SF Mono", Consolas, monospace;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; padding: 10px 14px;
+      font-size: 0.76rem; color: #d2a679; margin: 10px 0;
+      overflow-x: auto; white-space: pre;
+    }
+    .methodology-toggle {
+      display: block; width: 100%;
+      background: var(--surface); border-top: 1px solid var(--border); border-bottom: none; border-left: none; border-right: none;
+      color: var(--muted); font-size: 0.78rem; padding: 10px;
+      cursor: pointer; text-align: center; transition: color .15s;
+    }
+    .methodology-toggle:hover { color: var(--text); }
+
+    /* Scrollbar */
+    .sidebar::-webkit-scrollbar { width: 5px; }
+    .sidebar::-webkit-scrollbar-track { background: transparent; }
+    .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header>
+  <h1>Philadelphia <span>Neighborhood Equity & Livability</span> Index</h1>
+  <p>Multi-criteria spatial analysis of 508 Census Tracts · OpenDataPhilly + ACS 2023 5-Year Estimates</p>
+  <span class="badge badge-blue">QGIS</span>
+  <span class="badge badge-blue">GeoPandas</span>
+  <span class="badge badge-green">Moran's I = 0.735</span>
+  <span class="badge badge-red">114 Double Disadvantage Tracts</span>
+  <span class="badge badge-orange">144 Priority Intervention Zones</span>
+</header>
+
+<!-- ── App Layout ── -->
+<div class="app">
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+
+    <!-- Layer switcher -->
+    <div class="sidebar-section">
+      <h3>Map Layer</h3>
+      <button class="layer-btn active" data-layer="score" onclick="switchLayer('score', this)">
+        <span class="layer-dot" style="background:#58a6ff"></span>
+        Livability Score
+      </button>
+      <button class="layer-btn" data-layer="bivariate" onclick="switchLayer('bivariate', this)">
+        <span class="layer-dot" style="background:#f78166"></span>
+        Bivariate (Score × Diversity)
+      </button>
+      <button class="layer-btn" data-layer="lisa" onclick="switchLayer('lisa', this)">
+        <span class="layer-dot" style="background:#3fb950"></span>
+        LISA Clusters (Spatial Autocorrelation)
+      </button>
+      <button class="layer-btn" data-layer="priority" onclick="switchLayer('priority', this)">
+        <span class="layer-dot" style="background:#d29922"></span>
+        Priority Intervention Zones
+      </button>
+    </div>
+
+    <!-- Key stats -->
+    <div class="sidebar-section">
+      <h3>Key Findings</h3>
+      <div class="stat-grid">
+        <div class="stat-card accent">
+          <div class="num">0.735</div>
+          <div class="lbl">Global Moran's I (p&lt;0.001)</div>
+        </div>
+        <div class="stat-card red">
+          <div class="num">114</div>
+          <div class="lbl">Double Disadvantage Tracts</div>
+        </div>
+        <div class="stat-card yellow">
+          <div class="num">144</div>
+          <div class="lbl">Priority Intervention Zones</div>
+        </div>
+        <div class="stat-card green">
+          <div class="num">$34k</div>
+          <div class="lbl">Income gap: PIZ vs. rest of city</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Legend (dynamic) -->
+    <div class="sidebar-section" id="legend-section">
+      <h3>Legend</h3>
+      <div id="legend-content"></div>
+    </div>
+
+    <!-- Tract details -->
+    <div class="sidebar-section">
+      <h3>Tract Details (click map)</h3>
+      <div id="tract-info">
+        <p id="tract-placeholder">Click any tract on the map to see its metrics.</p>
+      </div>
+    </div>
+
+    <!-- Scatter chart -->
+    <div id="chart-wrap">
+      <h3>Income vs. Livability Score</h3>
+      <canvas id="scatter-canvas"></canvas>
+    </div>
+
+  </div><!-- /sidebar -->
+
+  <!-- Map -->
+  <div id="map"></div>
+
+</div><!-- /app -->
+
+<!-- Methodology toggle -->
+<button class="methodology-toggle" onclick="toggleMethodology(this)">
+  ▼ Methodology & Technical Documentation
+</button>
+<div class="methodology" id="methodology">
+  <h2>Methodology</h2>
+  <div class="method-grid">
+
+    <div class="method-card">
+      <h4>Data Sources</h4>
+      <ul>
+        <li>Census Tracts 2010 (OpenDataPhilly)</li>
+        <li>OPA Properties — 462,744 residential parcels</li>
+        <li>Crime Incidents 2023+ — 161,976 records</li>
+        <li>Schools (495), Hospitals (36)</li>
+        <li>Transit Stops (20,238), Recreation (171)</li>
+        <li>ACS 2023 5-Year — income, poverty, demographics</li>
+      </ul>
+    </div>
+
+    <div class="method-card">
+      <h4>Composite Score Formula</h4>
+      <p>All components min-max normalized to [0,1] before weighting.</p>
+      <div class="formula">I = 0.20·Income_norm
+  + 0.20·(1 − Crime_norm)
+  + 0.15·(1 − School_dist_norm)
+  + 0.15·(1 − Hospital_dist_norm)
+  + 0.15·Transit_norm
+  + 0.10·Property_value_norm
+  + 0.05·Recreation_norm</div>
+      <p>Final score scaled to 0–100. Quintile ranks assigned via Jenks natural breaks.</p>
+    </div>
+
+    <div class="method-card">
+      <h4>Spatial Autocorrelation</h4>
+      <p><strong>Global Moran's I = 0.735</strong> (z = 29.83, p &lt; 0.001) confirms strong spatial clustering — livability scores are not randomly distributed across the city.</p>
+      <p style="margin-top:8px">Local Moran's I (LISA) classifies each tract as HH (hot spot), LL (cold spot), HL/LH (spatial outliers), or NS (not significant at p &lt; 0.05).</p>
+    </div>
+
+    <div class="method-card">
+      <h4>Bivariate Classification</h4>
+      <p>Tracts classified into a 3×3 grid by tercile rank of livability score vs. pct_nonwhite. The "Double Disadvantage" cell (low score + high non-white %) captures 114 tracts — the primary Environmental Justice finding.</p>
+    </div>
+
+    <div class="method-card">
+      <h4>Priority Intervention Zones</h4>
+      <p>Operational definition: <strong>livability score ≤ 40th percentile AND pct_nonwhite ≥ 60th percentile</strong>. Identifies 144 tracts where resource deprivation overlaps with racial minority concentration.</p>
+      <p style="margin-top:8px">Average household income within PIZ: <strong>$41,654</strong> vs. $75,440 citywide average outside PIZ — a $33,786 gap.</p>
+    </div>
+
+    <div class="method-card">
+      <h4>AI Training Dataset Potential</h4>
+      <p>Each tract contains 18 normalized feature dimensions across economic, safety, accessibility, and demographic axes — structured for direct use in:</p>
+      <ul>
+        <li>Resource allocation prediction models</li>
+        <li>Neighborhood change detection</li>
+        <li>Policy impact simulation</li>
+      </ul>
+      <p style="margin-top:6px">CRS: EPSG:4326 output, EPSG:2272 for all distance calculations.</p>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── Data loading ─────────────────────────────────────────────────────────────
+let geojsonData = null;
+let currentLayer = "score";
+let leafletLayer = null;
+let scatterChart = null;
+
+// Fetch GeoJSON relative to this HTML file
+fetch("data/web_equity.geojson")
+  .then(r => r.json())
+  .then(data => {
+    geojsonData = data;
+    renderLayer("score");
+    buildScatterChart(data);
+  })
+  .catch(err => {
+    console.error("Failed to load GeoJSON:", err);
+    document.getElementById("tract-placeholder").textContent =
+      "Failed to load data. Please serve this page from a local server.";
+  });
+
+// ── Map init ─────────────────────────────────────────────────────────────────
+const map = L.map("map", { zoomControl: true, preferCanvas: true }).setView([39.99, -75.14], 12);
+
+L.tileLayer("https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png", {
+  attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
+  subdomains: "abcd", maxZoom: 19,
+}).addTo(map);
+
+// Labels on top
+L.tileLayer("https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png", {
+  subdomains: "abcd", maxZoom: 19, pane: "shadowPane",
+}).addTo(map);
+
+// ── Color schemes ─────────────────────────────────────────────────────────────
+function scoreColor(score) {
+  if (score == null) return "#30363d";
+  // RdYlGn interpolation (5 steps)
+  const stops = ["#d73027","#fc8d59","#fee08b","#91cf60","#1a9850"];
+  const pct = Math.max(0, Math.min(1, (score - 20) / 55));
+  const i = Math.min(3, Math.floor(pct * 4));
+  return stops[i + (pct * 4 - i > 0.5 ? 1 : 0)] || stops[i];
+}
+
+// 9-class bivariate palette (row=score low→high, col=diversity low→high)
+// Classic 3×3 bivariate: blue-purple-orange
+const BV_COLORS = {
+  "low_low":   "#e8e8e8", "low_med":   "#b5c4e1", "low_high":  "#6e96d0",
+  "med_low":   "#e4b87a", "med_med":   "#b0a8ad", "med_high":  "#5d82c0",
+  "high_low":  "#d36f27", "high_med":  "#9e6a64", "high_high": "#4a5fa8",
+};
+function bivariateColor(cls) { return BV_COLORS[cls] || "#30363d"; }
+
+const LISA_COLORS = { HH:"#d73027", LL:"#4575b4", HL:"#fc8d59", LH:"#91bfdb", NS:"#30363d" };
+function lisaColor(cls) { return LISA_COLORS[cls] || "#30363d"; }
+
+function priorityColor(pz) { return pz === 1 ? "#f85149" : "#1c3828"; }
+
+// ── Render layer ──────────────────────────────────────────────────────────────
+function renderLayer(layerId) {
+  if (!geojsonData) return;
+  if (leafletLayer) map.removeLayer(leafletLayer);
+
+  leafletLayer = L.geoJSON(geojsonData, {
+    style: feature => {
+      const p = feature.properties;
+      let fill = "#30363d";
+      if (layerId === "score")     fill = scoreColor(p.livability_score);
+      if (layerId === "bivariate") fill = bivariateColor(p.bivariate_class);
+      if (layerId === "lisa")      fill = lisaColor(p.lisa_cluster);
+      if (layerId === "priority")  fill = priorityColor(p.priority_zone);
+      return { fillColor: fill, fillOpacity: 0.78, color: "#0d1117", weight: 0.5 };
+    },
+    onEachFeature: (feature, layer) => {
+      layer.on({
+        click: () => showTractInfo(feature.properties),
+        mouseover: e => { e.target.setStyle({ weight: 2, color: "#e6edf3", fillOpacity: 0.95 }); },
+        mouseout:  e => { leafletLayer.resetStyle(e.target); },
+      });
+    },
+  }).addTo(map);
+
+  renderLegend(layerId);
+}
+
+// ── Legend ────────────────────────────────────────────────────────────────────
+function renderLegend(layerId) {
+  const el = document.getElementById("legend-content");
+  if (layerId === "score") {
+    el.innerHTML = [
+      ["#1a9850","High livability (score 65–74)"],
+      ["#91cf60","Above average (55–65)"],
+      ["#fee08b","Average (45–55)"],
+      ["#fc8d59","Below average (35–45)"],
+      ["#d73027","Low livability (20–35)"],
+    ].map(([c,l]) => `<div class="legend-row"><div class="legend-swatch" style="background:${c}"></div>${l}</div>`).join("");
+  } else if (layerId === "bivariate") {
+    el.innerHTML = `
+      <div style="font-size:.75rem;color:var(--muted);margin-bottom:8px">Score (low→high) × % Non-White (low→high)</div>
+      ${Object.entries({
+        "#6e96d0":"Low score + High diversity (Double Disadvantage)",
+        "#4a5fa8":"High score + High diversity",
+        "#d36f27":"Low score + Low diversity",
+        "#e8e8e8":"Low score + Low diversity (majority white)",
+        "#b0a8ad":"Average",
+      }).map(([c,l]) => `<div class="legend-row"><div class="legend-swatch" style="background:${c}"></div><span style="font-size:.76rem">${l}</span></div>`).join("")}`;
+  } else if (layerId === "lisa") {
+    el.innerHTML = Object.entries({
+      HH:"Hot Spot — high score cluster",
+      LL:"Cold Spot — low score cluster",
+      HL:"High outlier in low-score area",
+      LH:"Low outlier in high-score area",
+      NS:"Not significant",
+    }).map(([k,l]) => `<div class="legend-row"><div class="legend-swatch" style="background:${LISA_COLORS[k]}"></div>${l}</div>`).join("");
+  } else if (layerId === "priority") {
+    el.innerHTML = `
+      <div class="legend-row"><div class="legend-swatch" style="background:#f85149"></div>Priority Intervention Zone (144 tracts)</div>
+      <div class="legend-row"><div class="legend-swatch" style="background:#1c3828"></div>Other tracts</div>`;
+  }
+}
+
+// ── Tract info panel ──────────────────────────────────────────────────────────
+function showTractInfo(p) {
+  const fmt = (v, pre="", suf="") => v != null ? `${pre}${Number(v).toLocaleString()}${suf}` : "N/A";
+  const score = p.livability_score ?? 0;
+  const barColor = score >= 55 ? "#3fb950" : score >= 45 ? "#d29922" : "#f85149";
+
+  document.getElementById("tract-info").innerHTML = `
+    <div class="ti-name">Census Tract ${p.NAME10 ?? p.GEOID10}</div>
+    <div class="ti-row"><span class="ti-key">Livability Score</span><span class="ti-val">${fmt(p.livability_score)}/100</span></div>
+    <div class="ti-bar-wrap"><div class="ti-bar" style="width:${score}%;background:${barColor}"></div></div>
+    <div class="ti-row" style="margin-top:8px"><span class="ti-key">Median Income</span><span class="ti-val">${fmt(p.median_hh_income,"$")}</span></div>
+    <div class="ti-row"><span class="ti-key">% Non-White</span><span class="ti-val">${fmt(p.pct_nonwhite,"","%")}</span></div>
+    <div class="ti-row"><span class="ti-key">% Below Poverty</span><span class="ti-val">${fmt(p.pct_poverty,"","%")}</span></div>
+    <div class="ti-row"><span class="ti-key">Crime Count (2023+)</span><span class="ti-val">${fmt(p.crime_count)}</span></div>
+    <div class="ti-row"><span class="ti-key">Dist. to School</span><span class="ti-val">${p.school_dist_mi != null ? Number(p.school_dist_mi).toFixed(2)+" mi" : "N/A"}</span></div>
+    <div class="ti-row"><span class="ti-key">Dist. to Hospital</span><span class="ti-val">${p.hospital_dist_mi != null ? Number(p.hospital_dist_mi).toFixed(2)+" mi" : "N/A"}</span></div>
+    <div class="ti-row"><span class="ti-key">Transit Stops</span><span class="ti-val">${fmt(p.transit_count)}</span></div>
+    <div class="ti-row"><span class="ti-key">LISA Cluster</span><span class="ti-val" style="color:${LISA_COLORS[p.lisa_cluster]||'var(--muted)'}">${p.lisa_cluster ?? "NS"}</span></div>
+    <div class="ti-row"><span class="ti-key">Priority Zone</span><span class="ti-val" style="color:${p.priority_zone===1?'var(--red)':'var(--green)'}">${p.priority_zone===1?"YES":"No"}</span></div>
+  `;
+}
+
+// ── Layer switcher ────────────────────────────────────────────────────────────
+function switchLayer(id, btn) {
+  currentLayer = id;
+  document.querySelectorAll(".layer-btn").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  renderLayer(id);
+}
+
+// ── Scatter chart ─────────────────────────────────────────────────────────────
+function buildScatterChart(data) {
+  const pts = data.features
+    .filter(f => f.properties.median_hh_income && f.properties.livability_score)
+    .map(f => ({
+      x: f.properties.median_hh_income / 1000,
+      y: f.properties.livability_score,
+      pz: f.properties.priority_zone,
+    }));
+
+  const pzPts  = pts.filter(p => p.pz === 1);
+  const regPts = pts.filter(p => p.pz !== 1);
+
+  if (scatterChart) scatterChart.destroy();
+  scatterChart = new Chart(document.getElementById("scatter-canvas"), {
+    type: "scatter",
+    data: {
+      datasets: [
+        {
+          label: "Priority Zone",
+          data: pzPts,
+          backgroundColor: "rgba(248,81,73,0.65)",
+          pointRadius: 3,
+        },
+        {
+          label: "Other tracts",
+          data: regPts,
+          backgroundColor: "rgba(88,166,255,0.35)",
+          pointRadius: 2,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { labels: { color: "#64748b", font: { size: 10 } } },
+        tooltip: {
+          callbacks: {
+            label: ctx => `Income $${ctx.parsed.x.toFixed(0)}k · Score ${ctx.parsed.y}`,
+          },
+        },
+      },
+      scales: {
+        x: {
+          title: { display: true, text: "Median Household Income ($k)", color: "#64748b", font: { size: 10 } },
+          ticks: { color: "#64748b", font: { size: 9 } },
+          grid: { color: "rgba(0,0,0,.08)" },
+        },
+        y: {
+          title: { display: true, text: "Livability Score", color: "#64748b", font: { size: 10 } },
+          ticks: { color: "#64748b", font: { size: 9 } },
+          grid: { color: "rgba(0,0,0,.08)" },
+        },
+      },
+    },
+  });
+}
+
+// ── Methodology toggle ────────────────────────────────────────────────────────
+function toggleMethodology(btn) {
+  const el = document.getElementById("methodology");
+  const open = el.style.display === "block";
+  el.style.display = open ? "none" : "block";
+  btn.textContent = open ? "▼ Methodology & Technical Documentation" : "▲ Methodology & Technical Documentation";
+}
+</script>
+</body>
+</html>
